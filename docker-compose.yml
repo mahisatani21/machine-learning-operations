@@ -1,0 +1,17 @@
+services:
+  zenml_app:
+    build: .
+    image: zenml_swarm_app:latest
+    container_name: zenml_mlflow_optuna_swarm
+    ports:
+      - "8237:8237"   # ZenML dashboard
+      - "5000:5000"   # MLflow UI
+    volumes:
+      - .:/app
+      - zenml_data:/root/.config/zenml
+    stdin_open: true
+    tty: true
+    command: bash
+
+volumes:
+  zenml_data:
