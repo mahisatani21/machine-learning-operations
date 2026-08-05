@@ -1,7 +1,0 @@
-venv/
-.zen/
-mlruns/
-__pycache__/
-*.pyc
-.dvc/tmp/
-.dvc/cache/
