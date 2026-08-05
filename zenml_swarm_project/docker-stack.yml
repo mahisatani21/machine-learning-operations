@@ -1,0 +1,50 @@
+# Docker Swarm stack file. Unlike docker-compose.yml (used for local dev),
+# this does NOT bind-mount the project folder — Swarm can schedule a
+# service's containers onto any node in the cluster, and a bind mount only
+# sees files that exist on whichever host happens to run it. So instead:
+#   - the code is baked into the image at build time (see Dockerfile)
+#   - runtime state (mlruns, zenml config, the dataset) lives in named
+#     volumes, which on a *single-node* swarm behave just like local
+#     volumes. On a *multi-node* swarm, a named volume is still local to
+#     whichever node the container lands on — for real multi-node
+#     persistence you'd back these with a shared volume driver (NFS,
+#     GlusterFS, a cloud block-store plugin, etc). That's a production
+#     concern this file intentionally doesn't solve, since it depends on
+#     your infrastructure.
+#
+# Usage:
+#   docker build -t zenml_swarm_app:latest .
+#   docker swarm init                      # once, if not already a swarm manager
+#   docker stack deploy -c docker-stack.yml zenml_stack
+#
+# To use an image from a registry instead of a local build (e.g. after
+# GitHub Actions pushes one — see .github/workflows/ci.yml), set IMAGE_NAME:
+#   IMAGE_NAME=ghcr.io/yourname/zenml_swarm_app:main docker stack deploy -c docker-stack.yml zenml_stack
+
+services:
+  zenml_app:
+    image: ${IMAGE_NAME:-zenml_swarm_app:latest}
+    ports:
+      - target: 8237
+        published: 8237
+        mode: ingress
+      - target: 5000
+        published: 5000
+        mode: ingress
+    volumes:
+      - zenml_data:/root/.config/zenml
+      - mlflow_data:/app/mlruns
+      - project_data:/app/data
+    command: ["tail", "-f", "/dev/null"]   # keep the service alive; exec in to run commands
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 2G
+
+volumes:
+  zenml_data:
+  mlflow_data:
+  project_data:
