@@ -1,39 +1,35 @@
-#!/usr/bin/env bash
-# Run this after a pipeline run to version the dataset it produced.
-#
-# What it does:
-#   1. `dvc add` hashes data/breast_cancer.csv and stores the hash in
-#      data/breast_cancer.csv.dvc (a tiny text pointer file, safe for git).
-#      The actual CSV stays out of git (see .gitignore) — DVC tracks it in
-#      its own cache instead, which you can push to remote storage later
-#      with `dvc push` if you configure a remote.
-#   2. `git add` + `git commit` the pointer file, so the git history itself
-#      becomes the version history of your dataset: each commit says
-#      exactly which data hash was in use at that point.
-#
-# steps/train.py reads this same .dvc file to tag each MLflow model version
-# with the data hash it was trained on — that's what links a model version
-# back to an exact, reproducible dataset version.
-set -euo pipefail
+#!/bin/bash
+set -e
 
-DATA_FILE="data/breast_cancer.csv"
+MESSAGE="${1:-data: update dataset}"
 
-if [ ! -f "$DATA_FILE" ]; then
-  echo "No $DATA_FILE found — run 'python run_pipeline.py' first." >&2
-  exit 1
+# Find the Git repository root
+GIT_ROOT=$(git rev-parse --show-toplevel)
+
+# Move to the repository root
+cd "$GIT_ROOT"
+
+# Path to the project inside the repository
+PROJECT_DIR="zenml_swarm_project"
+
+# Ensure DVC is initialized
+if [ ! -d ".dvc" ] && [ ! -d "$PROJECT_DIR/.dvc" ]; then
+    echo "ERROR: DVC is not initialized."
+    exit 1
 fi
 
-dvc add "$DATA_FILE"
+# Run DVC from the project directory
+cd "$PROJECT_DIR"
 
-git add "${DATA_FILE}.dvc"
-[ -f "data/.gitignore" ] && git add "data/.gitignore"
-if git diff --cached --quiet; then
-  echo "No changes to the dataset — nothing new to version."
-else
-  MSG="${1:-data: version update}"
-  git commit -m "$MSG"
-  echo "Committed new data version: $(git rev-parse --short HEAD)"
-fi
+dvc add data/breast_cancer.csv
 
-echo "Current data hash:"
-grep "md5:" "${DATA_FILE}.dvc"
+# Return to the Git root
+cd "$GIT_ROOT"
+
+git add \
+    "$PROJECT_DIR/data/breast_cancer.csv.dvc" \
+    "$PROJECT_DIR/.gitignore"
+
+git commit -m "$MESSAGE"
+
+echo "✓ Dataset versioned successfully."
